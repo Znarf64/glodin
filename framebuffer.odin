@@ -68,6 +68,10 @@ create_framebuffer :: proc(
 
 	dimensions_resolved: bool
 
+	// Bind the framebuffer instead of using the NamedFramebuffer* function, because of renderdoc
+	gl.BindFramebuffer(gl.FRAMEBUFFER, fb.handle)
+	current_framebuffer = max(Framebuffer)
+
 	for color_texture, i in color_textures {
 		ct := get_texture(color_texture)
 		assert(!is_depth_format(ct.format) && (ct.format != .Stencil8), location = location)
@@ -81,14 +85,14 @@ create_framebuffer :: proc(
 			assert(fb.width == ct.width && fb.height == ct.height)
 		}
 
-		gl.NamedFramebufferTexture(fb.handle, gl.COLOR_ATTACHMENT0 + u32(i), ct.handle, 0)
+		gl.FramebufferTexture(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + u32(i), ct.handle, 0)
 	}
 
 	buffers := make([]u32, len(color_textures), context.temp_allocator)
 	for &b, i in buffers {
 		b = gl.COLOR_ATTACHMENT0 + u32(i)
 	}
-	gl.NamedFramebufferDrawBuffers(fb.handle, i32(len(buffers)), raw_data(buffers))
+	gl.DrawBuffers(i32(len(buffers)), raw_data(buffers))
 
 	fb.color_textures  = slice.clone(color_textures, framebuffer_data_allocator)
 	fb.depth_texture   = depth_texture
@@ -110,11 +114,11 @@ create_framebuffer :: proc(
 		)
 		assert(is_depth_format(d.format))
 		if is_depth_stencil_format(d.format) {
-			gl.NamedFramebufferTexture(fb.handle, gl.DEPTH_STENCIL_ATTACHMENT, d.handle, 0)
+			gl.FramebufferTexture(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, d.handle, 0)
 			fb.depth_stencil = true
 			fb.stencil_texture = depth_texture
 		} else {
-			gl.NamedFramebufferTexture(fb.handle, gl.DEPTH_ATTACHMENT, d.handle, 0)
+			gl.FramebufferTexture(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, d.handle, 0)
 		}
 	}
 	stencil: if s, ok := stencil_texture.?; ok {
@@ -143,8 +147,14 @@ create_framebuffer :: proc(
 			fb.depth_stencil = false
 			fb.stencil_texture = stencil_texture
 		}
-		gl.NamedFramebufferTexture(fb.handle, gl.STENCIL_ATTACHMENT, s.handle, 0)
+		gl.FramebufferTexture(gl.FRAMEBUFFER, gl.STENCIL_ATTACHMENT, s.handle, 0)
 	}
+
+	status := gl.CheckFramebufferStatus(gl.FRAMEBUFFER)
+	if status != gl.FRAMEBUFFER_COMPLETE {
+		error("Failed to create framebuffer:", gl.GL_Enum(status), location = location)
+	}
+
 	return cast(Framebuffer)ga_append(framebuffers, fb)
 }
 
