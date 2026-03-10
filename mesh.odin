@@ -1,5 +1,7 @@
 package glodin
 
+import "base:intrinsics"
+
 import "core:fmt"
 import glm "core:math/linalg/glsl"
 import "core:os"
@@ -603,3 +605,76 @@ destroy_instanced_mesh :: proc(instanced_mesh: Instanced_Mesh, destroy_base: boo
 	ga_remove(instanced_meshes, instanced_mesh)
 }
 
+
+Indirect_Buffer :: distinct Index
+
+@(private)
+indirect_buffers: ^Generational_Array(_Indirect_Buffer)
+
+@(private)
+get_indirect_buffer :: proc(buffer: Indirect_Buffer) -> ^_Indirect_Buffer {
+	return ga_get(indirect_buffers, buffer)
+}
+
+get_indirect_buffer_info :: proc(buffer: Indirect_Buffer) -> _Indirect_Buffer {
+	return ga_get(indirect_buffers, buffer)^
+}
+
+@(private)
+_Indirect_Buffer :: struct {
+	handle: u32,
+	stride: i32,
+	size:   int,
+}
+
+Draw_Arrays_Indirect_Command :: struct {
+	count:          u32,
+	instance_count: u32,
+	first_vertex:   u32,
+	base_instance:  u32,
+}
+
+Draw_Elements_Indirect_Command :: struct {
+	count:          u32,
+	instance_count: u32,
+	first_vertex:   u32,
+	base_vertex:    i32,
+	base_instance:  u32,
+}
+
+@(require_results)
+create_indirect_buffer :: proc(size, stride: int, location := #caller_location) -> Indirect_Buffer {
+	assert(stride >= size_of(Draw_Arrays_Indirect_Command), location = location)
+	buffer: _Indirect_Buffer = {
+		size   = size,
+		stride = i32(stride),
+	}
+	gl.CreateBuffers(1, &buffer.handle)
+	gl.NamedBufferStorage(buffer.handle, size, nil, gl.DYNAMIC_STORAGE_BIT)
+	return Indirect_Buffer(ga_append(indirect_buffers, buffer))
+}
+
+set_indirect_buffer_data :: proc(
+	buffer: Indirect_Buffer,
+	data:   $S/[]$E,
+	offset   := 0,
+	location := #caller_location,
+) where (
+	intrinsics.type_is_subtype_of(E, Draw_Arrays_Indirect_Command) ||
+	intrinsics.type_is_subtype_of(E, Draw_Elements_Indirect_Command)
+) {
+	buffer := ga_get(indirect_buffers, buffer)
+	size   := len(data) * size_of(E)
+	assert(buffer.stride == size_of(E), location = location)
+	assert(offset >= 0, location = location)
+	assert(size + offset <= buffer.size, location = location)
+	gl.NamedBufferSubData(buffer.handle, offset, size, raw_data(data))
+}
+
+destroy_indirect_buffer :: proc(buffer: Indirect_Buffer) {
+	{
+		buffer := ga_get(indirect_buffers, buffer)
+		gl.DeleteBuffers(1, &buffer.handle)
+	}
+	ga_remove(indirect_buffers, buffer)
+}

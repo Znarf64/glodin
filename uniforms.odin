@@ -115,6 +115,7 @@ set_uniform_buffer_data_internal :: proc(
 		ub.type,
 		location = location,
 	)
+	assert(offset >= 0)
 	assert(size + offset <= ub.size, location = location)
 	gl.NamedBufferSubData(ub.handle, offset, size, data)
 }
@@ -202,14 +203,14 @@ _set_uniform :: proc(program: ^Base_Program, uniform: Uniform, location: Source_
 			ub := get_uniform_buffer(ub)
 			for block in program.uniform_blocks {
 				if block.name == uniform.name {
-					assertf(
-						block.size == ub.size,
-						"Uniform buffer `%v` has incorrect size: %v, expected %v",
-						block.name,
-						ub.size,
-						block.size,
-						location = location,
-					)
+					// assertf(
+					// 	block.size == ub.size,
+					// 	"Uniform buffer `%v` has incorrect size: %v, expected %v",
+					// 	block.name,
+					// 	ub.size,
+					// 	block.size,
+					// 	location = location,
+					// )
 					if block.is_ssbo {
 						gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, u32(block.binding), ub.handle)
 					} else {

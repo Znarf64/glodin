@@ -397,17 +397,32 @@ draw_mesh :: proc(
 	framebuffer: Framebuffer,
 	program:     Program,
 	mesh:        Mesh,
-	mode:        Draw_Mode = .Triangles,
+	mode:        Draw_Mode       = .Triangles,
+	indirect:    Indirect_Buffer = {},
+	count:       int             = -1,
 	location := #caller_location,
 ) {
 	mesh := get_mesh(mesh)
 	prepare_drawing(framebuffer, program, mesh.vertex_type, nil, location)
 
 	gl.BindVertexArray(mesh.vao)
-	if mesh.ibo == 0 {
-		gl.DrawArrays(u32(mode), 0, mesh.count)
+	if indirect != 0 {
+		indirect := get_indirect_buffer(indirect)
+		gl.BindBuffer(gl.DRAW_INDIRECT_BUFFER, indirect.handle)
+
+		indirect_count := count >= 0 ? i32(count) : i32(indirect.size) / indirect.stride
+		if mesh.ibo == 0 {
+			gl.MultiDrawArraysIndirect(u32(mode), nil, indirect_count, indirect.stride)
+		} else {
+			gl.MultiDrawElementsIndirect(u32(mode), mesh.index_type, nil, indirect_count, indirect.stride)
+		}
 	} else {
-		gl.DrawElements(u32(mode), mesh.count, mesh.index_type, nil)
+		count := count >= 0 ? i32(count) : mesh.count
+		if mesh.ibo == 0 {
+			gl.DrawArrays(u32(mode), 0, count)
+		} else {
+			gl.DrawElements(u32(mode), count, mesh.index_type, nil)
+		}
 	}
 }
 

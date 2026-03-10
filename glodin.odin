@@ -29,6 +29,7 @@ destroy :: proc {
 	destroy_texture,
 	destroy_compute,
 	destroy_uniform_buffer,
+	destroy_indirect_buffer,
 }
 
 window_size_callback :: proc "contextless" (width, height: int) {
@@ -70,6 +71,7 @@ init :: proc(set_proc_address: gl.Set_Proc_Address_Type, location := #caller_loc
 	programs         = new(type_of(programs^        ))
 	computes         = new(type_of(computes^        ))
 	uniform_buffers  = new(type_of(uniform_buffers^ ))
+	indirect_buffers = new(type_of(indirect_buffers^))
 
 	gl.load_up_to(4, 6, set_proc_address)
 	gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
@@ -111,56 +113,48 @@ init :: proc(set_proc_address: gl.Set_Proc_Address_Type, location := #caller_loc
 }
 
 uninit :: proc() {
-	when GLODIN_TRACK_LEAKS {
-		iter: int
-		for _, fb in ga_iter(framebuffers, &iter) {
-			warnf("fb %v was not destroyed", fb)
-		}
+	ga_destroy :: proc(ga: ^Generational_Array($T)) {
+		when GLODIN_TRACK_LEAKS || true {
+			name: string
+			switch typeid_of(T) {
+			case Mesh:
+				name = "mesh"
+			case Texture:
+				name = "texture"
+			case Compute:
+				name = "compute"
+			case Sampler:
+				name = "sampler"
+			case Program:
+				name = "program"
+			case Framebuffer:
+				name = "framebuffer"
+			case Uniform_Buffer:
+				name = "uniform buffer"
+			case Instanced_Mesh:
+				name = "instanced mesh"
+			}
 
-		iter = 0
-		for _, tex in ga_iter(textures, &iter) {
-			warnf("tex %v was not destroyed", tex)
+			iter: int
+			for _, fb in ga_iter(ga, &iter) {
+				warnf("%s %v was not destroyed", name, fb)
+			}
 		}
-
-		iter = 0
-		for _, mesh in ga_iter(meshes, &iter) {
-			warnf("mesh %v was not destroyed", mesh)
-		}
-
-		iter = 0
-		for _, instanced_mesh in ga_iter(instanced_meshes, &iter) {
-			warnf("instanced_mesh %v was not destroyed", instanced_mesh)
-		}
-
-		iter = 0
-		for _, program in ga_iter(programs, &iter) {
-			warnf("program %v was not destroyed", program)
-		}
-
-		iter = 0
-		for _, compute in ga_iter(computes, &iter) {
-			warnf("compute %v was not destroyed", compute)
-		}
+		delete(ga.free)
+		free(ga)
 	}
 
-	delete(framebuffers.free    )
-	delete(textures.free        )
-	delete(meshes.free          )
-	delete(instanced_meshes.free)
-	delete(programs.free        )
-	delete(computes.free        )
-	delete(uniform_buffers.free )
-
-	free(framebuffers    )
-	free(textures        )
-	free(meshes          )
-	free(instanced_meshes)
-	free(programs        )
-	free(computes        )
-	free(uniform_buffers )
+	ga_destroy(meshes)
+	ga_destroy(textures)
+	ga_destroy(computes)
+	// ga_destroy(samplers)
+	ga_destroy(programs)
+	ga_destroy(framebuffers)
+	ga_destroy(uniform_buffers)
+	ga_destroy(instanced_meshes)
+	ga_destroy(indirect_buffers)
 
 	delete(texture_units)
 
 	logger_destroy()
 }
-

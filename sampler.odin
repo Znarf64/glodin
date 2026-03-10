@@ -13,7 +13,7 @@ Texture_Sampling_Parameters :: struct {
 
 Sampler :: distinct Index
 
-@(private = "file")
+@(private)
 samplers: ^Generational_Array(_Sampler)
 
 @(private)
