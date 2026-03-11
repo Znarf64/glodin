@@ -168,6 +168,7 @@ Uniform_Type :: union {
 	bool,
 	Texture,
 	Uniform_Buffer,
+	Indirect_Buffer,
 }
 
 Uniform :: struct {
@@ -199,8 +200,14 @@ _set_uniform :: proc(program: ^Base_Program, uniform: Uniform, location: Source_
 	p_uniform, ok := &program.uniforms[uniform.name]
 
 	if !ok {
+		buffer: u32
 		if ub, ok := uniform.type.(Uniform_Buffer); ok {
-			ub := get_uniform_buffer(ub)
+			buffer = get_uniform_buffer(ub).handle
+		}
+		if ib, ok := uniform.type.(Indirect_Buffer); ok {
+			buffer = get_indirect_buffer(ib).handle
+		}
+		if buffer != 0 {
 			for block in program.uniform_blocks {
 				if block.name == uniform.name {
 					// assertf(
@@ -212,9 +219,9 @@ _set_uniform :: proc(program: ^Base_Program, uniform: Uniform, location: Source_
 					// 	location = location,
 					// )
 					if block.is_ssbo {
-						gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, u32(block.binding), ub.handle)
+						gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, u32(block.binding), buffer)
 					} else {
-						gl.BindBufferBase(gl.UNIFORM_BUFFER,        u32(block.binding), ub.handle)
+						gl.BindBufferBase(gl.UNIFORM_BUFFER,        u32(block.binding), buffer)
 					}
 					return
 				}
