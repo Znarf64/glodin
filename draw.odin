@@ -85,6 +85,14 @@ set_polygon_mode :: proc(mode: Polygon_Mode, face: Face) {
 	gl.PolygonMode(FACE_VALUES[face], POLYGON_MODE_VALUES[mode])
 }
 
+set_color_mask :: proc(mask: [4]bool, buffer := -1) {
+	if buffer != -1 {
+		gl.ColorMaski(u32(buffer), expand_values(mask))
+	} else {
+		gl.ColorMask(expand_values(mask))
+	}
+}
+
 Stencil_Func :: enum {
 	Never,
 	Less,
