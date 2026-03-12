@@ -233,18 +233,18 @@ destroy_mip_chain :: proc(mip_chain: Mip_Chain, allocator := context.allocator) 
 }
 
 execute_mip_chain :: proc(mip_chain: Mip_Chain, source: glodin.Texture) {
-	w, h := glodin.get_texture_dimensions(source)
+	size := glodin.get_texture_size_2d(source)
 	glodin.set_uniforms(program_down, {
 		{ "srcTexture",    source,                   },
-		{ "srcResolution", glm.vec2{f32(w), f32(h)}, },
+		{ "srcResolution", la.array_cast(size, f32), },
 	})
 	for mip in mip_chain.mips[1:] {
 		glodin.set_framebuffer_color_texture(mip_chain.framebuffer, mip)
 		glodin.draw(mip_chain.framebuffer, program_down, quad)
-		w, h := glodin.get_texture_dimensions(mip)
+		size := glodin.get_texture_size_2d(mip)
 		glodin.set_uniforms(program_down, {
 			{ "srcTexture",    mip,                      },
-			{ "srcResolution", glm.vec2{f32(w), f32(h)}, },
+			{ "srcResolution", la.array_cast(size, f32), },
 		})
 	}
 

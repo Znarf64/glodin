@@ -1,6 +1,7 @@
 package glodin
 
 import "base:intrinsics"
+import "base:runtime"
 
 import glm "core:math/linalg/glsl"
 import "core:reflect"
@@ -35,7 +36,7 @@ create_uniform_buffer :: proc {
 	create_uniform_buffer_pod,
 }
 
-create_uniform_buffer_internal :: proc(data: rawptr, size: int, type: typeid, location := #caller_location) -> Uniform_Buffer {
+create_uniform_buffer_internal :: proc(data: rawptr, size: int, type: typeid, location: runtime.Source_Code_Location) -> Uniform_Buffer {
 	ub: _Uniform_Buffer
 	ub.type = type
 	ub.size = size
@@ -57,7 +58,7 @@ create_uniform_buffer_internal :: proc(data: rawptr, size: int, type: typeid, lo
 		)
 	}
 
-	return Uniform_Buffer(ga_append(uniform_buffers, ub))
+	return Uniform_Buffer(ga_append(uniform_buffers, ub, location))
 }
 
 create_uniform_buffer_slice :: proc(data: []$T, location := #caller_location) -> Uniform_Buffer {

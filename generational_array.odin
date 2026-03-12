@@ -1,6 +1,8 @@
 #+private
 package glodin
 
+import "base:runtime"
+
 Index :: u32
 
 _Index :: bit_field u32 {
@@ -15,6 +17,7 @@ Generational_Array_Elem :: struct($T: typeid) {
 		generation: u16  | 15,
 		alive:      bool | 1,
 	},
+	location: (runtime.Source_Code_Location when GLODIN_TRACK_LEAKS else struct{}),
 }
 
 Generational_Array :: struct($T: typeid) {
@@ -23,7 +26,7 @@ Generational_Array :: struct($T: typeid) {
 	free: [dynamic]u16,
 }
 
-ga_append :: proc(ga: ^Generational_Array($T), val: T) -> (index: Index) {
+ga_append :: proc(ga: ^Generational_Array($T), val: T, location: runtime.Source_Code_Location) -> (index: Index) {
 	assert(ga != nil)
 
 	_index: _Index
@@ -43,7 +46,10 @@ ga_append :: proc(ga: ^Generational_Array($T), val: T) -> (index: Index) {
 	_index.generation = 1
 	ga.data[ga.len] = {
 		value = val,
-		id = {generation = 1, alive = true},
+		id    = {generation = 1, alive = true},
+	}
+	when GLODIN_TRACK_LEAKS {
+		ga.data[ga.len].location = location
 	}
 	ga.len += 1
 	return Index(_index)

@@ -61,6 +61,7 @@ create_compute_hephaistos :: proc(
 	path:         string                     = "",
 	defines:      map[string]hep.Const_Value = {},
 	shared_types: []typeid                   = {},
+	location := #caller_location,
 ) -> (compute: Compute, ok: bool) {
 	spirv, reflection_info, _, errors := hephaistos_compile_shader(
 		source,
@@ -77,7 +78,7 @@ create_compute_hephaistos :: proc(
 		return
 	}
 
-	id := Compute(ga_append(computes, _Compute{}))
+	id := Compute(ga_append(computes, _Compute{}, location))
 	c  := ga_get(computes, id)
 
 	mem.dynamic_arena_init(&c.arena, alignment = 64)
@@ -270,7 +271,7 @@ create_program_hephaistos :: proc(
 	fragment_main := "fragment_main",
 	location      := #caller_location,
 ) -> (program: Program, ok: bool) {
-	id := Program(ga_append(programs, _Program{}))
+	id := Program(ga_append(programs, _Program{}, location))
 	p  := ga_get(programs, id)
 
 	mem.dynamic_arena_init(&p.arena, alignment = 64)

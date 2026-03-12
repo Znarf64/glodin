@@ -75,7 +75,7 @@ create_sampler :: proc(
 
 	gl.SamplerParameterf(s.handle, gl.TEXTURE_MAX_ANISOTROPY, anisotropy)
 
-	return Sampler(ga_append(samplers, s))
+	return Sampler(ga_append(samplers, s, location))
 }
 
 Texture_Mag_Filter :: enum {

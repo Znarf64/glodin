@@ -50,7 +50,7 @@ create_compute_source :: proc(
 	compute: Compute,
 	ok: bool,
 ) {
-	id := Compute(ga_append(computes, _Compute{}))
+	id := Compute(ga_append(computes, _Compute{}, location))
 	c  := ga_get(computes, id)
 
 	mem.dynamic_arena_init(&c.arena, alignment = 64)

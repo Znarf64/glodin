@@ -89,6 +89,7 @@ main :: proc() {
 	}
 
 	spheres_buffer := glodin.create_uniform_buffer(spheres)
+	defer glodin.destroy(spheres_buffer)
 
 	skybox := glodin.create_cube_map(2048)
 	defer glodin.destroy(skybox)
@@ -131,6 +132,7 @@ main :: proc() {
 
 	bvh_data := make([dynamic]Bvh_Node, MAX_BVH_NODES)
 	bvh_buffer := glodin.create_uniform_buffer(bvh_data[:])
+	defer glodin.destroy(bvh_buffer)
 
 	((^runtime.Raw_Dynamic_Array)(&bvh_data)).len = 0
 
@@ -138,6 +140,7 @@ main :: proc() {
 
 	build_bvh(spheres, &bvh_data, bvh_aabbs, 0, n_spheres)
 	bvh_aabbs_buffer := glodin.create_uniform_buffer(bvh_aabbs)
+	defer glodin.destroy(bvh_aabbs_buffer)
 	glodin.set_uniform_buffer_data(bvh_buffer, bvh_data[:])
 	glodin.set_uniform_buffer_data(spheres_buffer, spheres[:])
 
@@ -167,6 +170,7 @@ main :: proc() {
 		}
 	}
 	materials_buffer := glodin.create_uniform_buffer(material_data)
+	defer glodin.destroy(materials_buffer)
 
 	program = glodin.create_program_source(
 		#load("vertex.glsl"),

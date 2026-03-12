@@ -124,7 +124,7 @@ create_instanced_mesh_from_base :: proc(
 	m.instance_count = i32(len(per_instance))
 	m.instance_type = P
 
-	return Instanced_Mesh(ga_append(instanced_meshes, m))
+	return Instanced_Mesh(ga_append(instanced_meshes, m, location))
 }
 
 @(private)
@@ -438,11 +438,11 @@ create_mesh_indices :: proc(
 	indices:  $U/[]$I,
 	location := #caller_location,
 ) -> Mesh {
-	return Mesh(ga_append(meshes, _create_mesh(vertices, indices, location)))
+	return Mesh(ga_append(meshes, _create_mesh(vertices, indices, location), location))
 }
 
 create_mesh_no_indices :: proc(vertices: $T/[]$V, location := #caller_location) -> Mesh {
-	return Mesh(ga_append(meshes, _create_mesh(vertices, []u32{}, location)))
+	return Mesh(ga_append(meshes, _create_mesh(vertices, []u32{}, location), location))
 }
 
 @(private)
@@ -651,7 +651,7 @@ create_indirect_buffer :: proc(size, stride: int, location := #caller_location) 
 	}
 	gl.CreateBuffers(1, &buffer.handle)
 	gl.NamedBufferStorage(buffer.handle, size, nil, gl.DYNAMIC_STORAGE_BIT)
-	return Indirect_Buffer(ga_append(indirect_buffers, buffer))
+	return Indirect_Buffer(ga_append(indirect_buffers, buffer, location))
 }
 
 set_indirect_buffer_data :: proc(

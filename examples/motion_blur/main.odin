@@ -86,20 +86,20 @@ main :: proc() {
 	quad := glodin.create_mesh(vertices)
 	defer glodin.destroy(quad)
 
-	cursor := glodin.create_texture_from_file("cursor.png") or_else panic("Failed to load cursor texture")
+	cursor := glodin.create_texture_from_file_data(#load("cursor.png")) or_else panic("Failed to load cursor texture")
+	defer glodin.destroy(cursor)
 	glodin.set_texture_sampling_state(cursor, .Nearest, .Nearest, wrap = glodin.Texture_Wrap.Clamp_To_Border)
 
-	program =
-		glodin.create_program_file(
-			"vertex.glsl",
-			"fragment.glsl",
-		) or_else panic("Failed to compile program")
+	program = glodin.create_program_source(
+		#load("vertex.glsl"),
+		#load("fragment.glsl"),
+	) or_else panic("Failed to compile program")
 	defer glodin.destroy(program)
 
-	program_post =
-		glodin.create_program_file("vertex.glsl", "post.glsl") or_else panic(
-			"Failed to compile program",
-		)
+	program_post = glodin.create_program_source(
+		#load("vertex.glsl"),
+		#load("post.glsl"),
+	) or_else panic("Failed to compile program")
 	defer glodin.destroy(program_post)
 
 	glodin.set_uniforms(program, {{"u_texture", cursor}})
@@ -141,7 +141,6 @@ main :: proc() {
 			)
 			glodin.draw(accumulator.fb, program, quad)
 		} else do for i in 0 ..< mouse_position_buffer_index - 1 {
-			fmt.println("more than one position")
 			start := mouse_position_buffer[i]
 			end   := mouse_position_buffer[i + 1]
 			for i in 0 ..< 10 {

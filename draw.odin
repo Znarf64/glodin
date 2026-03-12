@@ -323,7 +323,7 @@ prepare_drawing :: proc(
 
 		framebuffer := get_framebuffer(framebuffer)
 		gl.BindFramebuffer(gl.FRAMEBUFFER, framebuffer.handle)
-		gl.Viewport(0, 0, i32(framebuffer.width), i32(framebuffer.height))
+		gl.Viewport(0, 0, i32(framebuffer.size.x), i32(framebuffer.size.y))
 	}
 	set_program_active(program)
 

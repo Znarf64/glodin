@@ -2,6 +2,9 @@ package glodin
 
 import "base:runtime"
 
+@(require)
+import "core:strings"
+
 import gl "vendor:OpenGL"
 import "vendor:glfw"
 
@@ -33,9 +36,7 @@ destroy :: proc {
 }
 
 window_size_callback :: proc "contextless" (width, height: int) {
-	root_fb.width = width
-	root_fb.height = height
-
+	root_fb.size = { width, height, }
 	gl.Viewport(0, 0, i32(width), i32(height))
 	current_framebuffer = {}
 }
@@ -113,31 +114,14 @@ init :: proc(set_proc_address: gl.Set_Proc_Address_Type, location := #caller_loc
 }
 
 uninit :: proc() {
-	ga_destroy :: proc(ga: ^Generational_Array($T)) {
-		when GLODIN_TRACK_LEAKS || true {
-			name: string
-			switch typeid_of(T) {
-			case Mesh:
-				name = "mesh"
-			case Texture:
-				name = "texture"
-			case Compute:
-				name = "compute"
-			case Sampler:
-				name = "sampler"
-			case Program:
-				name = "program"
-			case Framebuffer:
-				name = "framebuffer"
-			case Uniform_Buffer:
-				name = "uniform buffer"
-			case Instanced_Mesh:
-				name = "instanced mesh"
-			}
+	ga_destroy :: proc(ga: ^Generational_Array($T), e := #caller_expression(ga)) {
+		when GLODIN_TRACK_LEAKS {
+			name   := e[:len(e) - 1]
+			name, _ = strings.replace(name, "_", " ", -1, context.temp_allocator)
 
 			iter: int
-			for _, fb in ga_iter(ga, &iter) {
-				warnf("%s %v was not destroyed", name, fb)
+			for _, i in ga_iter(ga, &iter) {
+				warnf("%s %v was not destroyed", name, i, location = ga.data[_Index(i).index].location)
 			}
 		}
 		delete(ga.free)

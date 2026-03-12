@@ -305,7 +305,7 @@ create_program_source :: proc(
 	geometry_source: Maybe(string) = nil,
 	location := #caller_location,
 ) -> (program: Program, ok: bool) {
-	id := Program(ga_append(programs, _Program{}))
+	id := Program(ga_append(programs, _Program{}, location))
 	p  := ga_get(programs, id)
 
 	mem.dynamic_arena_init(&p.arena, alignment = 64)

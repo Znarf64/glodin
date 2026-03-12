@@ -49,15 +49,15 @@ _Framebuffer :: struct {
 	color_textures:  []Texture,
 	depth_texture:   Maybe(Texture),
 	stencil_texture: Maybe(Texture),
-	width, height:   int,
+	size:            [2]int,
 	samples:         int,
 	handle:          u32,
 	depth_stencil:   bool,
 }
 
 create_framebuffer :: proc(
-	color_textures: []Texture,
-	depth_texture: Maybe(Texture) = nil,
+	color_textures:  []Texture,
+	depth_texture:   Maybe(Texture) = nil,
 	stencil_texture: Maybe(Texture) = nil,
 	location := #caller_location,
 ) -> (
@@ -77,12 +77,11 @@ create_framebuffer :: proc(
 		assert(!is_depth_format(ct.format) && (ct.format != .Stencil8), location = location)
 
 		if !dimensions_resolved {
-			fb.width  = ct.width
-			fb.height = ct.height
+			fb.size = ct.size
 
 			dimensions_resolved = true
 		} else {
-			assert(fb.width == ct.width && fb.height == ct.height)
+			assert(fb.size == ct.size)
 		}
 
 		gl.FramebufferTexture(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + u32(i), ct.handle, 0)
@@ -102,16 +101,12 @@ create_framebuffer :: proc(
 		d := get_texture(d)
 
 		if !dimensions_resolved {
-			fb.width = d.width
-			fb.height = d.height
+			fb.size             = d.size
 			dimensions_resolved = true
 		}
 
 		assert(d != nil, "Depth texture attached to framebuffer is invalid", location = location)
-		assert(
-			d.width == fb.width && d.height == fb.height,
-			"Framebuffer textures have to have the same dimensions",
-		)
+		assert(fb.size == d.size, "Framebuffer textures have to have the same dimensions")
 		assert(is_depth_format(d.format))
 		if is_depth_stencil_format(d.format) {
 			gl.FramebufferTexture(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, d.handle, 0)
@@ -130,15 +125,11 @@ create_framebuffer :: proc(
 		}
 		s := get_texture(s)
 		if !dimensions_resolved {
-			fb.width = s.width
-			fb.height = s.height
+			fb.size             = s.size
 			dimensions_resolved = true
 		}
 		assert(is_depth_stencil_format(s.format) || s.format == .Stencil8)
-		assert(
-			s.width == fb.width && s.height == fb.height,
-			"Framebuffer textures have to have the same dimensions",
-		)
+		assert(s.size == fb.size, "Framebuffer textures have to have the same dimensions")
 		if is_depth_stencil_format(s.format) {
 			warn(
 				"Combined stencil and depth textures should be passed in as depth attachment",
@@ -155,18 +146,17 @@ create_framebuffer :: proc(
 		error("Failed to create framebuffer:", gl.GL_Enum(status), location = location)
 	}
 
-	return cast(Framebuffer)ga_append(framebuffers, fb)
+	return cast(Framebuffer)ga_append(framebuffers, fb, location)
 }
 
 set_framebuffer_color_texture :: proc(framebuffer: Framebuffer, texture: Texture, index := 0) {
 	framebuffer := get_framebuffer(framebuffer)
 	tex := get_texture(texture)
 	assert(!is_depth_format(tex.format) && (tex.format != .Stencil8))
-	if framebuffer.width != tex.width || framebuffer.height != tex.height {
+	if framebuffer.size != tex.size {
 		// panic("Wrong texture size for framebuffer")
-		gl.Viewport(0, 0, i32(tex.width), i32(tex.height))
-		framebuffer.width = tex.width
-		framebuffer.height = tex.height
+		gl.Viewport(0, 0, i32(tex.size.x), i32(tex.size.y))
+		framebuffer.size = tex.size
 	} // else 
 	{
 		gl.NamedFramebufferTexture(framebuffer.handle, gl.COLOR_ATTACHMENT0, tex.handle, 0)
@@ -178,7 +168,7 @@ set_framebuffer_depth_texture :: proc(framebuffer: Framebuffer, texture: Texture
 	framebuffer := get_framebuffer(framebuffer)
 	tex := get_texture(texture)
 	assert(is_depth_format(tex.format))
-	if framebuffer.width != tex.width || framebuffer.height != tex.height {
+	if framebuffer.size != tex.size {
 		panic("Wrong texture size for framebuffer")
 	} else {
 		gl.NamedFramebufferTexture(framebuffer.handle, gl.DEPTH_ATTACHMENT, tex.handle, 0)
@@ -190,7 +180,7 @@ set_framebuffer_stencil_texture :: proc(framebuffer: Framebuffer, texture: Textu
 	framebuffer := get_framebuffer(framebuffer)
 	tex := get_texture(texture)
 	assert(tex.format == .Stencil8 || is_depth_stencil_format(tex.format))
-	if framebuffer.width != tex.width || framebuffer.height != tex.height {
+	if framebuffer.size != tex.size {
 		panic("Wrong texture size for framebuffer")
 	} else {
 		gl.NamedFramebufferTexture(framebuffer.handle, gl.STENCIL_ATTACHMENT, tex.handle, 0)
@@ -202,7 +192,7 @@ set_framebuffer_depth_stencil_texture :: proc(framebuffer: Framebuffer, texture:
 	framebuffer := get_framebuffer(framebuffer)
 	tex := get_texture(texture)
 	assert(is_depth_stencil_format(tex.format))
-	if framebuffer.width != tex.width || framebuffer.height != tex.height {
+	if framebuffer.size != tex.size {
 		panic("Wrong texture size for framebuffer")
 	} else {
 		gl.NamedFramebufferTexture(framebuffer.handle, gl.DEPTH_STENCIL_ATTACHMENT, tex.handle, 0)
@@ -230,11 +220,8 @@ blit_framebuffers :: proc {
 
 @(require_results)
 get_framebuffer_size :: proc(fb: Framebuffer) -> (width, height: int) {
-	if fb == 0 {
-		return root_fb.width, root_fb.height
-	}
 	fb := get_framebuffer(fb)
-	return fb.width, fb.height
+	return fb.size.x, fb.size.y
 }
 
 blit_entire_framebuffer :: proc(

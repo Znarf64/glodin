@@ -73,7 +73,7 @@ TEXTURE_KIND_VALUES_MULTISAMPLED := #partial[Texture_Kind]u32{
 @(private)
 _Texture :: struct {
 	handle:        u32,
-	width, height: int,
+	size:          [2]int,
 	layers:        int,
 	samples:       int,
 	format:        Texture_Format,
@@ -99,8 +99,7 @@ create_texture_array :: proc(
 	location:                         = #caller_location,
 ) -> Texture {
 	t: _Texture = {
-		width        = width,
-		height       = height,
+		size         = { width, height, },
 		format       = format,
 		min_filter   = min_filter,
 		mag_filter   = mag_filter,
@@ -159,7 +158,7 @@ create_texture_array :: proc(
 		gl.TextureParameterfv(t.handle, gl.TEXTURE_BORDER_COLOR, &border_color[0])
 	}
 
-	return Texture(ga_append(textures, t))
+	return Texture(ga_append(textures, t, location))
 }
 
 set_texture_array_data :: proc {
@@ -232,13 +231,14 @@ CUBE_MAP_FACE_VALUES := [Cube_Map_Face]u32{
 }
 
 create_cube_map :: proc(
-	width: int,
-	format: Texture_Format = .RGBA8,
+	width:      int,
+	format:     Texture_Format     = .RGBA8,
 	mag_filter: Texture_Mag_Filter = .Linear,
 	min_filter: Texture_Min_Filter = .Linear_Mipmap_Nearest,
+	location := #caller_location,
 ) -> Texture {
 	t: _Texture = {
-		width      = width,
+		size       = width,
 		format     = format,
 		min_filter = min_filter,
 		mag_filter = mag_filter,
@@ -252,7 +252,7 @@ create_cube_map :: proc(
 	gl.TextureParameteri(t.handle, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE)
 	gl.TextureParameteri(t.handle, gl.TEXTURE_MAG_FILTER, i32(mag_filter))
 	gl.TextureParameteri(t.handle, gl.TEXTURE_MIN_FILTER, i32(min_filter))
-	return Texture(ga_append(textures, t))
+	return Texture(ga_append(textures, t, location))
 }
 
 @(private)
@@ -330,7 +330,7 @@ set_cube_map_face_texture :: proc(
 ) {
 	cm := get_texture(cm)
 	assert(cm.kind == .Cube_Map)
-	assert(len(data) == cm.width * cm.width)
+	assert(len(data) == cm.size.x * cm.size.x)
 	format, type := texture_parameters_from_slice(data, cm.format, location)
 	gl.TextureSubImage3D(
 		cm.handle,
@@ -338,8 +338,8 @@ set_cube_map_face_texture :: proc(
 		0,
 		0,
 		i32(face),
-		i32(cm.width),
-		i32(cm.width),
+		i32(cm.size.x),
+		i32(cm.size.x),
 		1,
 		format,
 		type,
@@ -355,7 +355,7 @@ get_texture_data :: proc(
 ) {
 	texture := get_texture(texture)^
 	assert(
-		len(data) == (texture.width >> uint(layer)) * (texture.height >> uint(layer)),
+		len(data) == (texture.size.x >> uint(layer)) * (texture.size.y >> uint(layer)),
 		location = location,
 	)
 	format, type := texture_parameters_from_slice(data, texture.format, location)
@@ -392,13 +392,13 @@ _write_texture_to_png :: proc(
 	C <=
 	4 {
 	t := get_texture(tex)
-	data := make([][C]byte, t.width * t.height, context.temp_allocator)
+	data := make([][C]byte, t.size.x * t.size.y, context.temp_allocator)
 	get_texture_data(tex, data, 0, location)
 	return(
 		stbi.write_png(
 			strings.clone_to_cstring(file_name, context.temp_allocator),
-			i32(t.width),
-			i32(t.height),
+			i32(t.size.x),
+			i32(t.size.y),
 			i32(C),
 			raw_data(data),
 			0,
@@ -563,52 +563,33 @@ format_channels :: proc(format: Texture_Format) -> (channels: int) {
 	unreachable()
 }
 
-get_texture_dimensions :: proc(texture: Texture) -> (width, height: int) {
-	t := get_texture(texture)
-	width = t.width
-	height = t.height
-	return
-}
-
-get_texture_width :: proc(texture: Texture) -> (width: int) {
-	t := get_texture(texture)
-	width = t.width
-	return
-}
-
-get_texture_height :: proc(texture: Texture) -> (height: int) {
-	t := get_texture(texture)
-	height = t.height
-	return
-}
-
 set_raw_texture_data :: proc(texture: Texture, data: []byte, location := #caller_location) {
 	texture := get_texture(texture)
 	assert(texture.samples == 0, "Cannot set texture data of multisampled texture")
-	assert(len(data) == texture.width * texture.height)
+	assert(len(data) == texture.size.x * texture.size.y)
 	format, type := texture_parameters_from_slice(data, texture.format, location)
 	gl.TextureSubImage2D(
 		texture.handle,
 		0,
 		0,
 		0,
-		i32(texture.width),
-		i32(texture.height),
+		i32(texture.size.x),
+		i32(texture.size.y),
 		format,
 		type,
 		raw_data(data),
 	)
 }
 
-// if width/height is below 0, it will be treated as the texture's width/height
+// if width/height is less than 0, it will be treated as the texture's width/height
 set_texture_data :: proc(
 	texture: Texture,
 	data: $T/[]$E,
-	x := 0,
-	y := 0,
-	width := -1,
+	x      := 0,
+	y      := 0,
+	width  := -1,
 	height := -1,
-	layer := 0,
+	layer  := 0,
 	location := #caller_location,
 ) {
 	texture := get_texture(texture)
@@ -621,7 +602,7 @@ set_texture_data :: proc(
 		return
 	}
 
-	lw, lh := texture.width >> uint(layer), texture.height >> uint(layer)
+	lw, lh := texture.size.x >> uint(layer), texture.size.y >> uint(layer)
 	w, h := width, height
 	if w < 0 {
 		w = lw
@@ -644,7 +625,7 @@ set_texture_data :: proc(
 			location = location,
 		)
 	}
-	if w + x > texture.width {
+	if w + x > texture.size.x {
 		errorf(
 			"Invalid x dimensions for `" + #procedure + "`: x: %v, width: %v, layer width: %v",
 			x,
@@ -654,7 +635,7 @@ set_texture_data :: proc(
 		)
 		return
 	}
-	if h + y > texture.height {
+	if h + y > texture.size.y {
 		errorf(
 			"Invalid y dimensions for `" + #procedure + "`: y: %v, height: %v, layer height: %v",
 			y,
@@ -961,8 +942,7 @@ create_texture_empty :: proc(
 	location := #caller_location,
 ) -> Texture {
 	t: _Texture = {
-		width        = width,
-		height       = height,
+		size         = { width, height, },
 		format       = format,
 		min_filter   = min_filter,
 		mag_filter   = mag_filter,
@@ -1013,7 +993,7 @@ create_texture_empty :: proc(
 		gl.TextureParameterfv(t.handle, gl.TEXTURE_BORDER_COLOR, &border_color[0])
 	}
 
-	return Texture(ga_append(textures, t))
+	return Texture(ga_append(textures, t, location))
 }
 
 destroy_texture :: #force_inline proc(texture: Texture, location := #caller_location) {
@@ -1024,6 +1004,55 @@ destroy_texture :: #force_inline proc(texture: Texture, location := #caller_loca
 	}
 	gl.DeleteTextures(1, &t)
 	ga_remove(textures, texture)
+}
+
+get_texture_size_2d :: proc(texture: Texture, location := #caller_location) -> [2]int {
+	t := get_texture(texture)
+	assert(t.kind == .Texture_2D, location = location)
+	return t.size
+}
+
+copy_texture_data_2d :: proc(
+	dst, src:                 Texture,
+	#no_broadcast size:       [2]int = -1,
+	#no_broadcast src_offset: [2]int = 0,
+	#no_broadcast dst_offset: [2]int = 0,
+	src_level:                int    = 0,
+	dst_level:                int    = 0,
+	location := #caller_location,
+) {
+	dst := get_texture(dst)
+	src := get_texture(src)
+
+	size := size
+	for &s, i in size {
+		max_size := min(dst.size[i] - dst_offset[i], src.size[i] - src_offset[i])
+		if s < 0 {
+			s = max_size
+		} else {
+			assert(s <= max_size, location = location)
+		}
+	}
+
+	assert(dst.kind == .Texture_2D, location = location)
+	assert(src.kind == .Texture_2D, location = location)
+	gl.CopyImageSubData(
+		src.handle,
+		gl.TEXTURE_2D,
+		i32(src_level),
+		i32(src_offset.x),
+		i32(src_offset.y),
+		0,
+		dst.handle,
+		gl.TEXTURE_2D,
+		i32(dst_level),
+		i32(dst_offset.x),
+		i32(dst_offset.y),
+		0,
+		i32(size.x),
+		i32(size.y),
+		1,
+	)
 }
 
 Texture_Format :: enum {
@@ -1107,7 +1136,6 @@ is_depth_stencil_format :: proc(format: Texture_Format) -> bool {
 	}
 }
 
-@(private)
 is_depth_format :: proc(format: Texture_Format) -> bool {
 	#partial switch format {
 	case .Depth32f, .Depth24, .Depth16, .Depth32f_Stencil8, .Depth24_Stencil8:
@@ -1117,7 +1145,6 @@ is_depth_format :: proc(format: Texture_Format) -> bool {
 	}
 }
 
-@(private)
 is_float_format :: proc(format: Texture_Format) -> bool {
 	#partial switch format {
 	case .R8,
@@ -1168,7 +1195,6 @@ is_float_format :: proc(format: Texture_Format) -> bool {
 	}
 }
 
-@(private)
 is_valid_compute_shader_input_format :: proc(format: Texture_Format) -> bool {
 	#partial switch format {
 	case .RGBA32F,
