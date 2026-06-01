@@ -16,16 +16,17 @@ Sampler :: distinct Index
 @(private)
 samplers: ^Generational_Array(_Sampler)
 
-@(private)
+@(private, require_results)
 get_sampler :: proc(sampler: Sampler) -> ^_Sampler {
 	return ga_get(samplers, sampler)
 }
 
-@(private)
+@(private, require_results)
 get_sampler_texture :: proc(sampler: Sampler) -> Texture {
 	return ga_get(samplers, sampler).texture
 }
 
+@(require_results)
 _get_sampler_handle :: proc(sampler: Sampler) -> Texture {
 	return get_sampler_texture(sampler)
 }
@@ -37,6 +38,7 @@ _Sampler :: struct {
 	using _: Texture_Sampling_Parameters,
 }
 
+@(require_results)
 create_sampler :: proc(
 	texture: Texture,
 	mag_filter: Texture_Mag_Filter = .Linear,

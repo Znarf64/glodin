@@ -13,8 +13,8 @@ vertex_main :: proc(
 	v_tex_coords: [2]f32 @ 1,
 ) {
 	v_tex_coords = a_tex_coords
-	v_position   = (u_transform * [3]f32{ a_position, 1, }).xy
-	$Position    = { v_position, 0, 1, }
+	v_position   = (u_transform * [3]f32{ ..a_position, 1, }).xy
+	$Position    = { ..v_position, 0, 1, }
 }
 
 @(fragment_shader)
@@ -22,5 +22,5 @@ fragment_main :: proc(
 	v_position:   [2]f32 @ 0,
 	v_tex_coords: [2]f32 @ 1,
 ) -> [4]f32 {
-	return [4]f32{ v_tex_coords, 1, 1, } * u_color
+	return [4]f32{ ..v_tex_coords, 1, 1, } * u_color
 }

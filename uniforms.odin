@@ -21,7 +21,7 @@ _Uniform_Buffer :: struct {
 	size:    int,
 }
 
-@(private)
+@(private, require_results)
 get_uniform_buffer :: proc(ub: Uniform_Buffer) -> ^_Uniform_Buffer {
 	return ga_get(uniform_buffers, ub)
 }
@@ -36,6 +36,7 @@ create_uniform_buffer :: proc {
 	create_uniform_buffer_pod,
 }
 
+@(require_results)
 create_uniform_buffer_internal :: proc(data: rawptr, size: int, type: typeid, location: runtime.Source_Code_Location) -> Uniform_Buffer {
 	ub: _Uniform_Buffer
 	ub.type = type
@@ -61,14 +62,17 @@ create_uniform_buffer_internal :: proc(data: rawptr, size: int, type: typeid, lo
 	return Uniform_Buffer(ga_append(uniform_buffers, ub, location))
 }
 
+@(require_results)
 create_uniform_buffer_slice :: proc(data: []$T, location := #caller_location) -> Uniform_Buffer {
 	return create_uniform_buffer_internal(raw_data(data), len(data) * size_of(T), T, location)
 }
 
+@(require_results)
 create_uniform_buffer_pod :: proc(data: $P/^$T, location := #caller_location) -> Uniform_Buffer where intrinsics.type_is_struct(T) {
 	return create_uniform_buffer_internal(data, size_of(T), T, location)
 }
 
+@(require_results)
 is_valid_uniform_buffer_elem_type :: proc(type: ^reflect.Type_Info) -> bool {
 	type := reflect.type_info_core(type)
 
@@ -183,7 +187,7 @@ Uniforms :: map[string]struct {
 	hash:       u64,
 }
 
-@(private)
+@(private, require_results)
 hash_uniform :: proc(u: Uniform_Type) -> u64 {
 	#partial switch _ in u {
 	case Texture:

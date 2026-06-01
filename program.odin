@@ -5,6 +5,7 @@ import "core:os"
 import "core:reflect"
 import "core:strings"
 import "core:mem"
+import vmem "core:mem/virtual"
 
 import gl "vendor:OpenGL"
 
@@ -13,20 +14,22 @@ Program :: distinct Index
 @(private)
 programs: ^Generational_Array(_Program)
 
-@(private)
+@(private, require_results)
 get_program :: proc(program: Program) -> ^_Program {
 	return ga_get(programs, program)
 }
 
-@(private)
+@(private, require_results)
 get_program_handle :: proc(program: Program) -> u32 {
 	return ga_get(programs, program).handle
 }
 
+@(require_results)
 _get_program_handle :: proc(program: Program) -> u32 {
 	return get_program_handle(program)
 }
 
+@(require_results)
 get_program_info :: proc(program: Program) -> _Program {
 	return get_program(program)^
 }
@@ -70,7 +73,7 @@ Base_Program :: struct {
 	uniforms:       Uniforms,
 	uniform_blocks: []Uniform_Buffer_Block,
 	textures:       #soa[dynamic]Texture_Binding,
-	arena:          mem.Dynamic_Arena,
+	arena:          vmem.Arena,
 }
 
 @(private)
@@ -222,6 +225,7 @@ check_program_vertex_type :: proc(
 	append(&program.valid_vertex_types, vertex_type)
 }
 
+@(require_results)
 create_program_file :: proc(
 	vertex_path, fragment_path: string,
 	geometry_path: Maybe(string) = nil,
@@ -256,7 +260,7 @@ Shader_Type :: enum {
 	Compute,
 }
 
-@(private = "file")
+@(private = "file", require_results)
 compile_shader :: proc(
 	source: string,
 	type:   Shader_Type,
@@ -300,6 +304,7 @@ compile_shader :: proc(
 	return
 }
 
+@(require_results)
 create_program_source :: proc(
 	vertex_source, fragment_source: string,
 	geometry_source: Maybe(string) = nil,
@@ -308,14 +313,15 @@ create_program_source :: proc(
 	id := Program(ga_append(programs, _Program{}, location))
 	p  := ga_get(programs, id)
 
-	mem.dynamic_arena_init(&p.arena, alignment = 64)
-	p.textures.allocator             = mem.dynamic_arena_allocator(&p.arena)
-	p.valid_vertex_types.allocator   = mem.dynamic_arena_allocator(&p.arena)
-	p.valid_instance_types.allocator = mem.dynamic_arena_allocator(&p.arena)
+	err := vmem.arena_init_growing(&p.arena)
+	assert(err == nil)
+	p.textures.allocator             = vmem.arena_allocator(&p.arena)
+	p.valid_vertex_types.allocator   = vmem.arena_allocator(&p.arena)
+	p.valid_instance_types.allocator = vmem.arena_allocator(&p.arena)
 
 	p.handle = gl.CreateProgram()
 	defer if !ok {
-		mem.dynamic_arena_destroy(&p.arena)
+		vmem.arena_destroy(&p.arena)
 		gl.DeleteProgram(p.handle)
 	}
 	status: i32
@@ -403,7 +409,7 @@ get_uniform_blocks_from_program :: proc(
 	gl.GetProgramInterfaceiv(program.handle, gl.UNIFORM_BLOCK, gl.ACTIVE_RESOURCES, &n_uniform_blocks)
 	n_ssbos: i32
 	gl.GetProgramInterfaceiv(program.handle, gl.SHADER_STORAGE_BLOCK, gl.ACTIVE_RESOURCES, &n_ssbos)
-	blocks := make([dynamic]Uniform_Buffer_Block, 0, int(n_uniform_blocks) + int(n_ssbos), mem.dynamic_arena_allocator(&program.arena))
+	blocks := make([dynamic]Uniform_Buffer_Block, 0, int(n_uniform_blocks) + int(n_ssbos), vmem.arena_allocator(&program.arena))
 
 	get_blocks :: proc(
 		program:  ^Base_Program,
@@ -470,7 +476,7 @@ get_uniform_blocks_from_program :: proc(
 				name    = strings.clone_from_ptr(
 					raw_data(buf),
 					int(length),
-					mem.dynamic_arena_allocator(&program.arena),
+					vmem.arena_allocator(&program.arena),
 				),
 				binding = int(values[0]),
 				size    = int(values[1]),
@@ -491,7 +497,7 @@ get_attributes_from_program :: proc(program: ^_Program) {
 	n: i32
 	gl.GetProgramInterfaceiv(program.handle, gl.PROGRAM_INPUT, gl.ACTIVE_RESOURCES, &n)
 
-	attributes := make([dynamic]Attribute, n, mem.dynamic_arena_allocator(&program.arena))
+	attributes := make([dynamic]Attribute, n, vmem.arena_allocator(&program.arena))
 
 	max_len: i32
 	gl.GetProgramInterfaceiv(program.handle, gl.PROGRAM_INPUT, gl.MAX_NAME_LENGTH, &max_len)
@@ -522,7 +528,7 @@ get_attributes_from_program :: proc(program: ^_Program) {
 			append(&attributes, Attribute{})
 		}
 		attributes[values[2]] = {
-			name     = strings.clone_from_ptr(raw_data(buf), int(length), mem.dynamic_arena_allocator(&program.arena)),
+			name     = strings.clone_from_ptr(raw_data(buf), int(length), vmem.arena_allocator(&program.arena)),
 			size     = values[1],
 			type     = Attribute_Type(values[0]),
 			location = values[2],
@@ -534,7 +540,7 @@ get_attributes_from_program :: proc(program: ^_Program) {
 
 destroy_program :: #force_inline proc(p: Program) {
 	program := get_program(p)
-	mem.dynamic_arena_destroy(&program.arena)
+	vmem.arena_destroy(&program.arena)
 	gl.DeleteProgram(program.handle)
 	ga_remove(programs, p)
 }
@@ -555,7 +561,7 @@ get_uniforms_from_program :: proc(program: ^Base_Program) {
 	uniform_count: i32
 	gl.GetProgramiv(program.handle, gl.ACTIVE_UNIFORMS, &uniform_count)
 
-	allocator := mem.dynamic_arena_allocator(&program.arena)
+	allocator := vmem.arena_allocator(&program.arena)
 
 	program.uniforms = make(Uniforms, int(uniform_count), allocator)
 

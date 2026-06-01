@@ -18,7 +18,7 @@ framebuffers: ^Generational_Array(_Framebuffer)
 
 Framebuffer :: distinct Index
 
-@(private)
+@(private, require_results)
 get_framebuffer :: proc(framebuffer: Framebuffer) -> ^_Framebuffer {
 	if framebuffer == {} {
 		return &root_fb
@@ -30,7 +30,7 @@ get_framebuffer :: proc(framebuffer: Framebuffer) -> ^_Framebuffer {
 	return fb
 }
 
-@(private)
+@(private, require_results)
 get_framebuffer_handle :: proc(framebuffer: Framebuffer) -> u32 {
 	if framebuffer == {} {
 		return 0
@@ -39,6 +39,7 @@ get_framebuffer_handle :: proc(framebuffer: Framebuffer) -> u32 {
 	return fb.handle
 }
 
+@(require_results)
 _get_framebuffer_handle :: proc(framebuffer: Framebuffer) -> u32 {
 	fb := ga_get(framebuffers, framebuffer)
 	return fb.handle
@@ -55,6 +56,7 @@ _Framebuffer :: struct {
 	depth_stencil:   bool,
 }
 
+@(require_results)
 create_framebuffer :: proc(
 	color_textures:  []Texture,
 	depth_texture:   Maybe(Texture) = nil,

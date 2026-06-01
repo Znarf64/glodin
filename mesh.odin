@@ -16,16 +16,17 @@ Instanced_Mesh :: distinct Index
 @(private)
 instanced_meshes: ^Generational_Array(_Instanced_Mesh)
 
-@(private)
+@(private, require_results)
 get_instanced_mesh :: proc(instanced_mesh: Instanced_Mesh) -> ^_Instanced_Mesh {
 	return ga_get(instanced_meshes, instanced_mesh)
 }
 
-@(private)
+@(private, require_results)
 get_instanced_mesh_base :: proc(instanced_mesh: Instanced_Mesh) -> Mesh {
 	return ga_get(instanced_meshes, instanced_mesh).mesh
 }
 
+@(require_results)
 get_instanced_mesh_info :: proc(instanced_mesh: Instanced_Mesh) -> _Instanced_Mesh {
 	return ga_get(instanced_meshes, instanced_mesh)^
 }
@@ -63,6 +64,7 @@ create_instanced_mesh :: proc {
 	create_instanced_mesh_from_base,
 }
 
+@(require_results)
 create_instanced_mesh_indices :: proc(
 	vertices: $T/[]$V,
 	indices: $T2/[]$I,
@@ -72,6 +74,7 @@ create_instanced_mesh_indices :: proc(
 	return _create_instanced_mesh(vertices, indices, per_instance, location)
 }
 
+@(require_results)
 create_instanced_mesh_no_indices :: proc(
 	vertices: $T/[]$V,
 	per_instance: $T3/[]$P,
@@ -80,7 +83,7 @@ create_instanced_mesh_no_indices :: proc(
 	return _create_instanced_mesh(vertices, []u32{}, per_instance, location)
 }
 
-@(private)
+@(private, require_results)
 _create_instanced_mesh :: proc(
 	vertices: $T/[]$V,
 	indices: $T2/[]$I,
@@ -94,6 +97,7 @@ _create_instanced_mesh :: proc(
 	)
 }
 
+@(require_results)
 create_instanced_mesh_from_base :: proc(
 	mesh: Mesh,
 	per_instance: $T/[]$P,
@@ -305,11 +309,12 @@ Mesh :: distinct Index
 @(private)
 meshes: ^Generational_Array(_Mesh)
 
-@(private)
+@(private, require_results)
 get_mesh :: proc(mesh: Mesh) -> ^_Mesh {
 	return ga_get(meshes, mesh)
 }
 
+@(require_results)
 get_mesh_info :: proc(mesh: Mesh) -> _Mesh {
 	return ga_get(meshes, mesh)^
 }
@@ -325,6 +330,7 @@ _Mesh :: struct {
 	n_attributes: u32,
 }
 
+@(require_results)
 create_mesh_gltf_data :: proc(
 	file_data: []byte,
 	path:      string,
@@ -412,6 +418,7 @@ create_mesh_gltf_data :: proc(
 	return
 }
 
+@(require_results)
 create_mesh_gltf :: proc(
 	path: string,
 	allocator := context.allocator,
@@ -433,6 +440,7 @@ create_mesh :: proc {
 	create_mesh_no_indices,
 }
 
+@(require_results)
 create_mesh_indices :: proc(
 	vertices: $T/[]$V,
 	indices:  $U/[]$I,
@@ -441,11 +449,12 @@ create_mesh_indices :: proc(
 	return Mesh(ga_append(meshes, _create_mesh(vertices, indices, location), location))
 }
 
+@(require_results)
 create_mesh_no_indices :: proc(vertices: $T/[]$V, location := #caller_location) -> Mesh {
 	return Mesh(ga_append(meshes, _create_mesh(vertices, []u32{}, location), location))
 }
 
-@(private)
+@(private, require_results)
 _create_mesh :: proc(
 	vertices: $T/[]$V,
 	indices: $U/[]$I,
@@ -521,7 +530,7 @@ set_mesh_data :: proc(
 	gl.NamedBufferSubData(mesh.vbo, offset, len(vertices) * size_of(V), raw_data(vertices))
 }
 
-@(private)
+@(private, require_results)
 gl_size_and_type :: proc(type: ^reflect.Type_Info) -> (size: i32, gl_type: u32) {
 	#partial switch v in type.variant {
 	case reflect.Type_Info_Named:
@@ -611,11 +620,12 @@ Indirect_Buffer :: distinct Index
 @(private)
 indirect_buffers: ^Generational_Array(_Indirect_Buffer)
 
-@(private)
+@(private, require_results)
 get_indirect_buffer :: proc(buffer: Indirect_Buffer) -> ^_Indirect_Buffer {
 	return ga_get(indirect_buffers, buffer)
 }
 
+@(require_results)
 get_indirect_buffer_info :: proc(buffer: Indirect_Buffer) -> _Indirect_Buffer {
 	return ga_get(indirect_buffers, buffer)^
 }

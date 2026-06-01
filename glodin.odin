@@ -20,6 +20,7 @@ get_handle :: proc {
 	get_framebuffer_handle,
 }
 
+@(require_results)
 _get_handle :: proc(x: $T) -> u32 {
 	return get_handle(x)
 }

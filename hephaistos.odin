@@ -1,9 +1,9 @@
 package glodin
 
 import "core:fmt"
-import "core:mem"
 import "core:strings"
 import "core:os"
+import vmem "core:mem/virtual"
 
 import gl "vendor:OpenGL"
 
@@ -55,14 +55,16 @@ hephaistos_compile_shader :: proc(
 	return
 }
 
+@(require_results)
 create_compute_hephaistos :: proc(
 	source:       string,
 	path:         string                     = "",
 	defines:      map[string]hep.Const_Value = {},
 	shared_types: []typeid                   = {},
-	location := #caller_location,
+	entry_point := "",
+	location    := #caller_location,
 ) -> (compute: Compute, ok: bool) {
-	spirv, reflection_info, _, errors := hephaistos_compile_shader(
+	spirv, reflection_info, entry_points, errors := hephaistos_compile_shader(
 		source,
 		defines,
 		shared_types,
@@ -80,9 +82,10 @@ create_compute_hephaistos :: proc(
 	id := Compute(ga_append(computes, _Compute{}, location))
 	c  := ga_get(computes, id)
 
-	mem.dynamic_arena_init(&c.arena, alignment = 64)
+	err := vmem.arena_init_growing(&c.arena)
+	assert(err == nil)
 
-	c.textures.allocator = mem.dynamic_arena_allocator(&c.arena)
+	c.textures.allocator = vmem.arena_allocator(&c.arena)
 
 	shader := gl.CreateShader(gl.COMPUTE_SHADER)
 	defer gl.DeleteShader(shader)
@@ -91,7 +94,16 @@ create_compute_hephaistos :: proc(
 
 	c.handle = gl.CreateProgram()
 
-	gl.SpecializeShader(shader, "main", 0, nil, nil)
+	entry_point := strings.clone_to_cstring(entry_point, context.temp_allocator)
+
+	for name, info in entry_points {
+		if entry_point == "" && info.stage == .Compute {
+			entry_point = strings.clone_to_cstring(name, context.temp_allocator)
+			debugf("implicitly using compute entry point: '%s'", entry_point, location = location)
+		}
+	}
+
+	gl.SpecializeShader(shader, entry_point, 0, nil, nil)
 	gl.AttachShader(c.handle, shader)
 	gl.LinkProgram(c.handle)
 
@@ -117,7 +129,7 @@ hephaistos_collect_uniforms :: proc(
 	p:               ^Base_Program,
 	reflection_info: map[string]hep.Reflection_Info,
 ) {
-	allocator       := mem.dynamic_arena_allocator(&p.arena)
+	allocator       := vmem.arena_allocator(&p.arena)
 	p.uniforms       = make(Uniforms, len(reflection_info), allocator)
 	p.uniform_blocks = make([]Uniform_Buffer_Block, len(reflection_info), allocator)
 
@@ -262,29 +274,31 @@ hephaistos_collect_uniforms :: proc(
 	p.uniform_blocks = p.uniform_blocks[:n_uniform_blocks]
 }
 
+@(require_results)
 create_program_hephaistos :: proc(
 	source:       string,
 	defines:      map[string]hep.Const_Value = {},
 	shared_types: []typeid                   = {},
-	vertex_main   := "vertex_main",
-	fragment_main := "fragment_main",
-	location      := #caller_location,
+	vertex_entry_point   := "",
+	fragment_entry_point := "",
+	location             := #caller_location,
 ) -> (program: Program, ok: bool) {
 	id := Program(ga_append(programs, _Program{}, location))
 	p  := ga_get(programs, id)
 
-	mem.dynamic_arena_init(&p.arena, alignment = 64)
-	p.textures.allocator             = mem.dynamic_arena_allocator(&p.arena)
-	p.valid_vertex_types.allocator   = mem.dynamic_arena_allocator(&p.arena)
-	p.valid_instance_types.allocator = mem.dynamic_arena_allocator(&p.arena)
+	err := vmem.arena_init_growing(&p.arena)
+	assert(err == nil)
+	p.textures.allocator             = vmem.arena_allocator(&p.arena)
+	p.valid_vertex_types.allocator   = vmem.arena_allocator(&p.arena)
+	p.valid_instance_types.allocator = vmem.arena_allocator(&p.arena)
 
 	p.handle = gl.CreateProgram()
 	defer if !ok {
-		mem.dynamic_arena_destroy(&p.arena)
+		vmem.arena_destroy(&p.arena)
 		gl.DeleteProgram(p.handle)
 	}
 
-	spirv, reflection_info, _, errors := hephaistos_compile_shader(
+	spirv, reflection_info, entry_points, errors := hephaistos_compile_shader(
 		source,
 		defines,
 		shared_types,
@@ -311,15 +325,39 @@ create_program_hephaistos :: proc(
 		gl.DeleteShader(shader)
 	}
 
-	entry_point_names: [2]cstring = {
-		strings.clone_to_cstring(vertex_main,   context.temp_allocator),
-		strings.clone_to_cstring(fragment_main, context.temp_allocator),
+	vertex_entry_point_name   := strings.clone_to_cstring(vertex_entry_point,   context.temp_allocator)
+	fragment_entry_point_name := strings.clone_to_cstring(fragment_entry_point, context.temp_allocator)
+
+	for name, info in entry_points {
+		if vertex_entry_point_name   == "" && info.stage == .Vertex   {
+			vertex_entry_point_name   = strings.clone_to_cstring(name, context.temp_allocator)
+			debugf("implicitly using vertex entry point: '%s'", vertex_entry_point_name, location = location)
+		}
+		if fragment_entry_point_name == "" && info.stage == .Fragment {
+			fragment_entry_point_name = strings.clone_to_cstring(name, context.temp_allocator)
+			debugf("implicitly using fragment entry point: '%s'", fragment_entry_point_name, location = location)
+		}
 	}
 
-	for shader, i in shaders {
-		gl.SpecializeShader(shader, entry_point_names[i], 0, nil, nil)
-		gl.AttachShader(p.handle, shader)
+	if vertex_entry_point_name == "" {
+		error("shader is missing a vertex entry point", location = location)
+		return
 	}
+
+	if fragment_entry_point_name == "" {
+		error("shader is missing a fragment entry point", location = location)
+		return
+	}
+
+	vertex_shader   := shaders[0]
+	fragment_shader := shaders[1]
+
+	gl.SpecializeShader(vertex_shader, vertex_entry_point_name, 0, nil, nil)
+	gl.AttachShader(p.handle, vertex_shader)
+
+	gl.SpecializeShader(fragment_shader, fragment_entry_point_name, 0, nil, nil)
+	gl.AttachShader(p.handle, fragment_shader)
+
 	gl.LinkProgram(p.handle)
 
 	status: i32

@@ -1,7 +1,7 @@
 package glodin
 
 import "core:os"
-import "core:mem"
+import vmem "core:mem/virtual"
 
 import gl "vendor:OpenGL"
 
@@ -29,6 +29,7 @@ _Compute :: struct {
 	using base: Base_Program,
 }
 
+@(require_results)
 create_compute_file :: proc(
 	path: string,
 	location := #caller_location,
@@ -43,6 +44,7 @@ create_compute_file :: proc(
 	return create_compute_source(string(data), location)
 }
 
+@(require_results)
 create_compute_source :: proc(
 	source: string,
 	location := #caller_location,
@@ -53,8 +55,9 @@ create_compute_source :: proc(
 	id := Compute(ga_append(computes, _Compute{}, location))
 	c  := ga_get(computes, id)
 
-	mem.dynamic_arena_init(&c.arena, alignment = 64)
-	c.textures.allocator = mem.dynamic_arena_allocator(&c.arena)
+	err := vmem.arena_init_growing(&c.arena)
+	assert(err == nil)
+	c.textures.allocator = vmem.arena_allocator(&c.arena)
 
 	c.handle, ok = gl.load_compute_source(source)
 	if !ok {
@@ -89,7 +92,7 @@ dispatch_compute :: proc(
 
 destroy_compute :: proc(compute: Compute) {
 	c := get_compute(compute)
-	mem.dynamic_arena_destroy(&c.arena)
+	vmem.arena_destroy(&c.arena)
 	gl.DeleteProgram(c.handle)
 	ga_remove(computes, compute)
 }

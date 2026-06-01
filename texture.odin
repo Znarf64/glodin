@@ -17,12 +17,12 @@ Texture :: distinct Index
 @(private)
 textures: ^Generational_Array(_Texture)
 
-@(private)
+@(private, require_results)
 get_texture :: proc(texture: Texture) -> ^_Texture {
 	return ga_get(textures, texture)
 }
 
-@(private)
+@(private, require_results)
 get_texture_handle :: proc(texture: Texture) -> (handle: u32, ok: bool) {
 	ptr := ga_get(textures, texture)
 	if ptr == nil {
@@ -31,10 +31,12 @@ get_texture_handle :: proc(texture: Texture) -> (handle: u32, ok: bool) {
 	return ptr.handle, true
 }
 
+@(require_results)
 _get_texture_handle :: proc(texture: Texture) -> (handle: u32, ok: bool) {
 	return get_texture_handle(texture)
 }
 
+@(require_results)
 get_texture_info :: proc(texture: Texture) -> (info: _Texture, ok: bool) {
 	ptr := get_texture(texture)
 	if ptr == nil {
@@ -86,6 +88,7 @@ _Texture :: struct {
 	kind:          Texture_Kind,
 }
 
+@(require_results)
 create_texture_array :: proc(
 	width, height: int,
 	count:         int,
@@ -230,6 +233,7 @@ CUBE_MAP_FACE_VALUES := [Cube_Map_Face]u32{
 	.Negative_Z = gl.TEXTURE_CUBE_MAP_NEGATIVE_Z,
 }
 
+@(require_results)
 create_cube_map :: proc(
 	width:      int,
 	format:     Texture_Format     = .RGBA8,
@@ -255,7 +259,7 @@ create_cube_map :: proc(
 	return Texture(ga_append(textures, t, location))
 }
 
-@(private)
+@(private, require_results)
 texture_parameters_from_slice :: proc(
 	data: $T/[]$E,
 	internal_format: Texture_Format,
@@ -421,6 +425,7 @@ Texture_Component_Type :: enum {
 }
 
 
+@(require_results)
 format_channels :: proc(format: Texture_Format) -> (channels: int) {
 	switch format {
 	case .R8:
@@ -675,6 +680,7 @@ create_texture :: proc {
 	create_texture_from_file_data,
 }
 
+@(require_results)
 create_texture_from_file :: proc(
 	path: string,
 	layers := 1,
@@ -691,6 +697,7 @@ create_texture_from_file :: proc(
 	return create_texture_from_file_data(data, path, layers, image_options, location)
 }
 
+@(require_results)
 create_texture_from_file_data :: proc(
 	data: []byte,
 	path: string = "",
@@ -782,7 +789,7 @@ set_texture_sampling_state :: proc(
 	t.border_color = border_color
 }
 
-@(private = "file")
+@(private = "file", require_results)
 check_multisampling_parameters :: proc(
 	format:       Texture_Format,
 	layers:       int,
@@ -862,7 +869,7 @@ check_multisampling_parameters :: proc(
 	return corrected_samples
 }
 
-@(private = "file")
+@(private = "file", require_results)
 check_texture_layer_count :: proc(
 	layers: int,
 	location: Source_Code_Location,
@@ -900,6 +907,7 @@ generate_mipmaps :: proc(texture: Texture, location := #caller_location) {
 	gl.GenerateTextureMipmap(handle)
 }
 
+@(require_results)
 create_texture_with_data :: proc(
 	width, height: int,
 	data: $T/[]$E,
@@ -930,6 +938,7 @@ create_texture_with_data :: proc(
 	return texture
 }
 
+@(require_results)
 create_texture_empty :: proc(
 	width, height: int,
 	format: Texture_Format = .RGBA8,
@@ -1006,6 +1015,7 @@ destroy_texture :: #force_inline proc(texture: Texture, location := #caller_loca
 	ga_remove(textures, texture)
 }
 
+@(require_results)
 get_texture_size_2d :: proc(texture: Texture, location := #caller_location) -> [2]int {
 	t := get_texture(texture)
 	assert(t.kind == .Texture_2D, location = location)
@@ -1126,7 +1136,7 @@ Texture_Format :: enum {
 	Stencil8          = gl.STENCIL_INDEX8,
 }
 
-@(private)
+@(require_results)
 is_depth_stencil_format :: proc(format: Texture_Format) -> bool {
 	#partial switch format {
 	case .Depth32f_Stencil8, .Depth24_Stencil8:
@@ -1136,6 +1146,7 @@ is_depth_stencil_format :: proc(format: Texture_Format) -> bool {
 	}
 }
 
+@(require_results)
 is_depth_format :: proc(format: Texture_Format) -> bool {
 	#partial switch format {
 	case .Depth32f, .Depth24, .Depth16, .Depth32f_Stencil8, .Depth24_Stencil8:
@@ -1145,6 +1156,7 @@ is_depth_format :: proc(format: Texture_Format) -> bool {
 	}
 }
 
+@(require_results)
 is_float_format :: proc(format: Texture_Format) -> bool {
 	#partial switch format {
 	case .R8,
@@ -1195,6 +1207,7 @@ is_float_format :: proc(format: Texture_Format) -> bool {
 	}
 }
 
+@(require_results)
 is_valid_compute_shader_input_format :: proc(format: Texture_Format) -> bool {
 	#partial switch format {
 	case .RGBA32F,
@@ -1256,6 +1269,7 @@ max_texture_units: int
 // indicates to `create_texture` (and similar procedures), that the maximum number of mipmaps for the specified dimensions should be allocated
 MAX_MIPMAPS :: max(int)
 
+@(require_results)
 max_texture_mipmaps :: proc(dimensions: ..int) -> (n: int) {
 	m: int
 	for d in dimensions {
