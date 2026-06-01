@@ -7,8 +7,7 @@ import "core:os"
 
 import gl "vendor:OpenGL"
 
-import hep       "hephaistos"
-import hep_types "hephaistos/types"
+import hep "hephaistos"
 
 @(private, require_results)
 hephaistos_compile_shader :: proc(
@@ -24,7 +23,7 @@ hephaistos_compile_shader :: proc(
 	errors:          []hep.Error,
 ) {
 	tokens: []hep.Token
-	tokens, errors = hep.tokenize(source, false, context.temp_allocator, error_allocator)
+	tokens, errors = hep.tokenize(source, false, -1, context.temp_allocator, error_allocator)
 	if len(errors) != 0 {
 		return
 	}
@@ -40,9 +39,9 @@ hephaistos_compile_shader :: proc(
 		stmts,
 		defines,
 		shared_types,
-		{ .Auto_Map_Locations, .Auto_Bind_Uniforms, .Enable_Reflection, },
-		context.temp_allocator,
-		error_allocator,
+		flags           = { .Auto_Map_Locations, .Auto_Bind_Uniforms, .Enable_Reflection, },
+		allocator       = context.temp_allocator,
+		error_allocator = error_allocator,
 	)
 	if len(errors) != 0 {
 		return
@@ -51,7 +50,7 @@ hephaistos_compile_shader :: proc(
 	reflection_info = checker.reflection.interface
 	entry_points    = checker.reflection.entry_points
 
-	code = hep.cg_generate(&checker, stmts, nil, source, hep.SPIR_V_VERSION_1_0, allocator = allocator)
+	code = hep.cg_file(&checker, stmts, nil, source, hep.SPIR_V_VERSION_1_0, allocator = allocator)
 
 	return
 }
@@ -125,11 +124,11 @@ hephaistos_collect_uniforms :: proc(
 	n_uniform_blocks := 0
 
 	for name, info in reflection_info {
-		switch info.interface {
+		#partial switch info.interface {
 		case .None:
 		case .Uniform:
 			hephaistos_type_to_gl :: proc(type: ^hep.Type) -> (gl_type: gl.Uniform_Type) {
-				type := hep_types.base_type(type)
+				type := hep.base_type(type)
 
 				#partial switch type.kind {
 				case .Invalid, .Tuple, .Proc,  .Enum, .Bit_Set:
@@ -150,10 +149,10 @@ hephaistos_collect_uniforms :: proc(
 				case .Struct:
 					panic("Can not have struct uniforms, prefer using uniform buffers")
 				case .Matrix:
-					m    := type.variant.(^hep_types.Matrix)
-					elem := hep_types.matrix_elem(type)
+					m    := type.variant.(^hep.Type_Matrix)
+					elem := m.col_type.elem
 
-					assert(hep_types.matrix_is_square(m))
+					assert(hep.type_matrix_is_square(m))
 
 					#partial switch elem.kind {
 					case .Float:
@@ -173,8 +172,8 @@ hephaistos_collect_uniforms :: proc(
 					}
 
 					// TODO: non-square matrices
-				case .Vector:
-					elem := hep_types.vector_elem(type)
+				case .Array:
+					elem := hep.type_array_elem(type)
 					#partial switch elem.kind {
 					case .Int:
 						gl_type = .INT_VEC2
@@ -190,11 +189,11 @@ hephaistos_collect_uniforms :: proc(
 						}
 					}
 
-					gl_type += auto_cast (hep_types.vector_len(type) - 2)
+					gl_type += auto_cast (hep.type_array_len(type) - 2)
 				case .Buffer:
 					panic("Can not have buffer uniforms, prefer using shader storage buffers")
 				case .Sampler:
-					sampler := type.variant.(^hep_types.Image)
+					sampler := type.variant.(^hep.Type_Image)
 					switch sampler.dimensions {
 					case 1:
 						gl_type = .SAMPLER_1D
@@ -204,8 +203,8 @@ hephaistos_collect_uniforms :: proc(
 						gl_type = .SAMPLER_3D
 					}
 					texel := sampler.texel_type
-					if texel.kind == .Vector {
-						texel = hep_types.vector_elem(texel)
+					if texel.kind == .Array {
+						texel = hep.type_array_elem(texel)
 					}
 					#partial switch sampler.texel_type.kind {
 					case .Int:
@@ -214,7 +213,7 @@ hephaistos_collect_uniforms :: proc(
 						gl_type += gl.Uniform_Type.UNSIGNED_INT_SAMPLER_2D - gl.Uniform_Type.SAMPLER_2D
 					}
 				case .Image:
-					image := type.variant.(^hep_types.Image)
+					image := type.variant.(^hep.Type_Image)
 					switch image.dimensions {
 					case 1:
 						gl_type = .IMAGE_1D
@@ -224,8 +223,8 @@ hephaistos_collect_uniforms :: proc(
 						gl_type = .IMAGE_3D
 					}
 					texel := image.texel_type
-					if texel.kind == .Vector {
-						texel = hep_types.vector_elem(texel)
+					if texel.kind == .Array {
+						texel = hep.type_array_elem(texel)
 					}
 					#partial switch image.texel_type.kind {
 					case .Int:
@@ -250,13 +249,13 @@ hephaistos_collect_uniforms :: proc(
 		case .Uniform_Buffer, .Storage_Buffer:
 			p.uniform_blocks[n_uniform_blocks] = {
 				name    = name,
-				binding = info.binding,
+				binding = int(info.binding),
 				size    = info.type.size,
 				is_ssbo = info.interface == .Storage_Buffer,
 			}
 			n_uniform_blocks += 1
-		case .Push_Constant:
-			error("Push constants are not supported in OpenGL")
+		case:
+			errorf("%s are not supported in OpenGL", info.interface)
 		}
 	}
 
