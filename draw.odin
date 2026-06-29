@@ -312,11 +312,11 @@ draw :: proc {
 
 @(private)
 prepare_drawing :: proc(
-	framebuffer: Framebuffer,
-	program: Program,
-	vertex_type: typeid,
+	framebuffer:       Framebuffer,
+	program:           Program,
+	vertex_type:       typeid,
 	per_instance_type: typeid,
-	location: Source_Code_Location,
+	location:          Source_Code_Location,
 ) {
 	if framebuffer != current_framebuffer {
 		current_framebuffer = framebuffer

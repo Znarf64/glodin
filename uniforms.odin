@@ -16,9 +16,9 @@ uniform_buffers: ^Generational_Array(_Uniform_Buffer)
 
 @(private)
 _Uniform_Buffer :: struct {
-	handle:  u32,
-	type:    typeid,
-	size:    int,
+	handle: u32,
+	type:   typeid,
+	size:   int,
 }
 
 @(private, require_results)
@@ -32,6 +32,7 @@ max_uniform_buffer_size: int
 max_shader_storage_buffer_size: int
 
 create_uniform_buffer :: proc {
+	create_uniform_buffer_empty,
 	create_uniform_buffer_slice,
 	create_uniform_buffer_pod,
 }
@@ -47,7 +48,7 @@ create_uniform_buffer_internal :: proc(data: rawptr, size: int, type: typeid, lo
 		ub.handle,
 		ub.size,
 		data,
-		gl.DYNAMIC_STORAGE_BIT,
+		gl.DYNAMIC_STORAGE_BIT | gl.MAP_READ_BIT | gl.MAP_WRITE_BIT | gl.MAP_PERSISTENT_BIT | gl.MAP_COHERENT_BIT,
 	)
 
 	if ub.size > max_shader_storage_buffer_size {
@@ -63,6 +64,11 @@ create_uniform_buffer_internal :: proc(data: rawptr, size: int, type: typeid, lo
 }
 
 @(require_results)
+create_uniform_buffer_empty :: proc($T: typeid, location := #caller_location) -> Uniform_Buffer {
+	return create_uniform_buffer_internal(nil, size_of(T), T, location)
+}
+
+@(require_results)
 create_uniform_buffer_slice :: proc(data: []$T, location := #caller_location) -> Uniform_Buffer {
 	return create_uniform_buffer_internal(raw_data(data), len(data) * size_of(T), T, location)
 }
@@ -70,6 +76,48 @@ create_uniform_buffer_slice :: proc(data: []$T, location := #caller_location) ->
 @(require_results)
 create_uniform_buffer_pod :: proc(data: $P/^$T, location := #caller_location) -> Uniform_Buffer where intrinsics.type_is_struct(T) {
 	return create_uniform_buffer_internal(data, size_of(T), T, location)
+}
+
+map_uniform_buffer :: proc {
+	map_uniform_buffer_slice,
+	map_uniform_buffer_pointer,
+}
+
+@(require_results)
+map_uniform_buffer_slice :: proc($S: typeid/[]$T, ub: Uniform_Buffer, location := #caller_location) -> S {
+	ub := get_uniform_buffer(ub)
+
+	assertf(
+		ub.type == T,
+		"Tried to map uniform buffer alllocation as []%v, but it was created as []%v",
+		typeid_of(T),
+		ub.type,
+		location = location,
+	)
+
+	pointer := gl.MapNamedBufferRange(ub.handle, 0, ub.size, gl.MAP_WRITE_BIT | gl.MAP_COHERENT_BIT | gl.MAP_PERSISTENT_BIT)
+	return S(([^]T)(pointer)[:ub.size / size_of(T)])
+}
+
+@(require_results)
+map_uniform_buffer_pointer :: proc($P: typeid/^$T, ub: Uniform_Buffer, location := #caller_location) -> P {
+	ub := get_uniform_buffer(ub)
+
+	assertf(
+		ub.type == T,
+		"Tried to map uniform buffer alllocation as ^%v, but it was created as ^%v",
+		typeid_of(T),
+		ub.type,
+		location = location,
+	)
+
+	pointer := gl.MapNamedBufferRange(ub.handle, 0, ub.size, gl.MAP_WRITE_BIT | gl.MAP_COHERENT_BIT | gl.MAP_PERSISTENT_BIT)
+	return P(pointer)
+}
+
+unmap_uniform_buffer :: proc(ub: Uniform_Buffer) {
+	ub := get_uniform_buffer(ub)
+	gl.UnmapNamedBuffer(ub.handle)
 }
 
 @(require_results)
@@ -245,6 +293,7 @@ _set_uniform :: proc(program: ^Base_Program, uniform: Uniform, location: Source_
 	p_uniform.hash = hash
 
 	loc := p_uniform.location
+	uniform := uniform
 	#partial switch &u in uniform.type {
 	case f32:
 		assert_uniform_type(p_uniform.kind, .FLOAT, location)

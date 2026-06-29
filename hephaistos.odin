@@ -1,6 +1,9 @@
 package glodin
 
+import "base:runtime"
+
 import "core:fmt"
+import "core:slice"
 import "core:strings"
 import "core:os"
 import vmem "core:mem/virtual"
@@ -8,6 +11,8 @@ import vmem "core:mem/virtual"
 import gl "vendor:OpenGL"
 
 import hep "hephaistos"
+
+GLODIN_HEPHAISTOS_ENABLE_CORE :: #config(GLODIN_HEPHAISTOS_ENABLE_CORE, true)
 
 @(private, require_results)
 hephaistos_compile_shader :: proc(
@@ -22,6 +27,11 @@ hephaistos_compile_shader :: proc(
 	entry_points:    map[string]hep.Entry_Point_Info,
 	errors:          []hep.Error,
 ) {
+	if !core_libraries_ok && GLODIN_HEPHAISTOS_ENABLE_CORE {
+		error("Failed to check hephaistos core libraries, you will not be able to import them")
+		core_libraries_ok = true
+	}
+
 	tokens: []hep.Token
 	tokens, errors = hep.tokenize(source, false, -1, context.temp_allocator, error_allocator)
 	if len(errors) != 0 {
@@ -39,6 +49,7 @@ hephaistos_compile_shader :: proc(
 		stmts,
 		defines,
 		shared_types,
+		core_libraries,
 		flags           = { .Auto_Map_Locations, .Auto_Bind_Uniforms, .Enable_Reflection, },
 		allocator       = context.temp_allocator,
 		error_allocator = error_allocator,
@@ -51,6 +62,8 @@ hephaistos_compile_shader :: proc(
 	entry_points    = checker.reflection.entry_points
 
 	code = hep.cg_file(&checker, stmts, nil, source, hep.SPIR_V_VERSION_1_0, allocator = allocator)
+
+	_ = os.write_entire_file("a.spv", slice.to_bytes(code))
 
 	return
 }
@@ -375,4 +388,16 @@ create_program_hephaistos :: proc(
 	get_attributes_from_program(p)
 
 	return id, true
+}
+
+@(private)
+core_libraries: map[string]hep.Library
+
+@(private)
+core_libraries_ok: bool
+
+@(init)
+load_core_libraries :: proc "contextless" () {
+	context                           = runtime.default_context()
+	core_libraries, core_libraries_ok = hep.check_core_libraries()
 }
