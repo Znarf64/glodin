@@ -275,7 +275,7 @@ hephaistos_collect_uniforms :: proc(
 			p.uniform_blocks[n_uniform_blocks] = {
 				name    = name,
 				binding = int(info.binding),
-				size    = info.type.size,
+				size    = int(info.type.size),
 				is_ssbo = info.interface == .Storage_Buffer,
 			}
 			n_uniform_blocks += 1
